@@ -1,0 +1,1073 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chasing Zero — A Digital PID Control Loop Tutorial</title>
+    <style>
+    /* #region CSS */
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+        --bg:       #0d0d1a;
+        --surface:  #13132a;
+        --panel:    #0f0f22;
+        --border:   #252540;
+        --accent:   #4fc3f7;
+        --accent2:  #7c83fd;
+        --warn:     #ff6b6b;
+        --text:     #dce1f0;
+        --muted:    #6a7090;
+        --green:    #66bb6a;
+    }
+
+    body {
+        background: var(--bg);
+        color: var(--text);
+        font-family: Georgia, 'Times New Roman', serif;
+        font-size: 1.05rem;
+        line-height: 1.75;
+    }
+
+    .page {
+        max-width: 920px;
+        margin: 0 auto;
+        padding: 3rem 1.5rem 8rem;
+    }
+
+    /* --- Typography --- */
+
+    h1 {
+        font-size: 2.6rem;
+        color: var(--accent);
+        letter-spacing: -1px;
+        margin-bottom: 0.2rem;
+    }
+
+    .subtitle {
+        color: var(--muted);
+        font-size: 1.05rem;
+        margin-bottom: 3rem;
+        font-style: italic;
+    }
+
+    h2 {
+        font-size: 1.65rem;
+        color: var(--accent);
+        margin: 3.5rem 0 1.2rem;
+        padding-bottom: 0.5rem;
+        border-bottom: 1px solid var(--border);
+        font-family: Georgia, serif;
+    }
+
+    h3 {
+        font-size: 1.1rem;
+        color: var(--accent2);
+        margin: 1.6rem 0 0.5rem;
+        font-family: 'Courier New', monospace;
+        letter-spacing: 0.5px;
+    }
+
+    p { margin-bottom: 1rem; }
+
+    code {
+        font-family: 'Courier New', monospace;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        color: var(--accent);
+        padding: 0.1em 0.4em;
+        border-radius: 3px;
+        font-size: 0.88em;
+    }
+
+    pre {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 1.1rem 1.3rem;
+        margin: 1.2rem 0 1.4rem;
+        overflow-x: auto;
+        font-family: 'Courier New', monospace;
+        font-size: 0.88rem;
+        line-height: 1.6;
+        color: var(--accent);
+    }
+
+    pre code {
+        background: none;
+        border: none;
+        padding: 0;
+        font-size: 1em;
+        color: inherit;
+    }
+
+    strong { color: var(--text); }
+
+    .hint {
+        background: var(--surface);
+        border-left: 3px solid var(--accent2);
+        padding: 0.9rem 1.1rem;
+        margin: 1.2rem 0 1.6rem;
+        border-radius: 0 5px 5px 0;
+        font-size: 0.92rem;
+        color: var(--muted);
+    }
+
+    .hint strong { color: var(--accent2); }
+
+    .section-divider {
+        border: none;
+        border-top: 1px solid var(--border);
+        margin: 3.5rem 0;
+    }
+
+    /* --- Simulation panel --- */
+
+    .sim-panel {
+        display: flex;
+        gap: 1.4rem;
+        margin: 1.4rem 0 2rem;
+        background: var(--surface);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1.2rem;
+        align-items: flex-start;
+    }
+
+    .sim-left {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        min-width: 0;
+    }
+
+    .sliders-row {
+        display: flex;
+        gap: 1rem;
+        align-items: flex-end;
+    }
+
+    .sim-right {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .sim-right canvas {
+        display: block;
+        width: 100%;
+        border-radius: 4px;
+    }
+
+    /* --- Buttons --- */
+
+    .sim-buttons {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    button {
+        font-family: 'Courier New', monospace;
+        font-size: 0.82rem;
+        padding: 0.4rem 0.9rem;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        cursor: pointer;
+        background: var(--panel);
+        color: var(--text);
+        transition: border-color 0.12s, color 0.12s;
+        letter-spacing: 0.5px;
+    }
+
+    button:hover:not(:disabled) {
+        border-color: var(--accent);
+        color: var(--accent);
+    }
+
+    button.btn-active {
+        background: var(--accent);
+        color: var(--bg);
+        border-color: var(--accent);
+        font-weight: bold;
+    }
+
+    button:disabled {
+        opacity: 0.4;
+        cursor: default;
+    }
+
+    /* --- SliderInput --- */
+
+    .slider-input {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 0.35rem;
+    }
+
+    input[type="range"].vertical-slider {
+        writing-mode: vertical-lr;
+        direction: rtl;
+        height: 120px;
+        width: 24px;
+        cursor: pointer;
+        accent-color: var(--accent);
+        appearance: slider-vertical;
+        -webkit-appearance: slider-vertical;
+    }
+
+    .slider-number {
+        width: 62px;
+        text-align: center;
+        font-family: 'Courier New', monospace;
+        font-size: 0.83rem;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        color: var(--text);
+        padding: 0.28rem 0.3rem;
+        border-radius: 3px;
+    }
+
+    .slider-number:focus {
+        outline: none;
+        border-color: var(--accent);
+    }
+
+    .slider-label {
+        font-family: 'Courier New', monospace;
+        font-size: 0.75rem;
+        color: var(--muted);
+        text-align: center;
+        line-height: 1.25;
+    }
+
+    /* --- Status bar --- */
+
+    .sim-status {
+        font-family: 'Courier New', monospace;
+        font-size: 0.78rem;
+        color: var(--muted);
+        display: flex;
+        flex-direction: column;
+        gap: 0.18rem;
+        padding-top: 0.2rem;
+    }
+
+    .sim-status .stat-val { color: var(--accent); }
+    .sim-status .stat-warn { color: var(--warn); }
+
+    /* #endregion */
+    </style>
+</head>
+<body>
+
+<!-- #region HTML -->
+<div class="page">
+
+    <!-- ═══════════════════════════════════════ Section 0: Introduction ═══ -->
+
+    <h1>Chasing Zero</h1>
+    <p class="subtitle">A hands-on introduction to digital PID control loops</p>
+
+    <p>
+        Every time your 3D printer heats its nozzle, a small program is running in a tight loop.
+        It reads the current temperature, compares it to the target, and decides how much power
+        to send to the heater — then does it again, dozens of times per second.
+    </p>
+    <p>
+        This is a <strong>control loop</strong>. The goal is always the same: close the gap between
+        where you are and where you want to be. To chase the error down to zero.
+    </p>
+    <p>
+        Getting this right is harder than it sounds. Apply too little power and you never quite
+        reach temperature. Apply too much and you overshoot, then oscillate. The algorithm that
+        solves this cleanly is called a <strong>PID controller</strong> — short for Proportional,
+        Integral, Derivative. We will build one up, one term at a time.
+    </p>
+
+    <h3>Key concepts</h3>
+    <p>
+        <strong>Setpoint</strong> — the target value you want to reach (e.g. 200 °C).<br>
+        <strong>Process variable</strong> — the value being measured (current temperature).<br>
+        <strong>Error</strong> — the gap between them: <code>error = setpoint − temperature</code>.<br>
+        <strong>Output</strong> — the control signal sent to the actuator (heater power, 0–100 %).<br>
+        <strong>Gain</strong> — a tuning coefficient that scales each term's influence.
+    </p>
+    <p>
+        Each simulation on this page models a typical FDM printer hotend. You set the target
+        temperature and the starting temperature; everything else — how fast the heater raises
+        temperature, how fast the hotend loses heat to the air — is fixed to realistic values
+        and hidden away.
+    </p>
+
+    <hr class="section-divider">
+
+    <!-- ════════════════════════════════════════ Section 1: Proportional ═══ -->
+
+    <h2>1 — Proportional Control</h2>
+    <p>
+        The most natural idea: if you're far from the target, apply a lot of power. If you're
+        close, apply less. Make the output <em>proportional to the error</em>.
+    </p>
+
+<pre><code>error  = targetTemp - currentTemp;
+output = Kp * error;             // proportional term only
+output = clamp(output, 0, 100); // heater can't go below 0% or above 100%</code></pre>
+
+    <p>
+        <strong>Kp</strong> is the <em>proportional gain</em>. Raise it and the controller
+        responds more aggressively to error. Lower it and it responds more gently.
+    </p>
+    <p>
+        This works well at first — the heater blasts at full power while the temperature is far
+        off. But there's a catch. As the temperature approaches the setpoint, the error shrinks,
+        and so does the output. Eventually the controller reaches a balance point where the output
+        is just enough to overcome heat loss — but that balance is always <em>below</em> the
+        setpoint. The controller has no reason to push further. This leftover gap is called
+        <strong>steady-state error</strong>.
+    </p>
+    <p>
+        A high Kp can also cause the temperature to <strong>overshoot</strong> — it drives hard
+        past the target and then has to correct back, leading to oscillation.
+    </p>
+
+    <div class="hint">
+        <strong>Try it:</strong> Start with <strong>Kp = 2</strong>. Notice how the temperature
+        levels off just below the setpoint — that is steady-state error. Then push
+        <strong>Kp to 5 or higher</strong> and watch the temperature swing past the target.
+    </div>
+
+    <div class="sim-panel">
+        <div class="sim-left">
+            <div class="sliders-row" id="sliders-1"></div>
+            <div class="sim-buttons">
+                <button id="btn-run-1">Run</button>
+                <button id="btn-step-1">Step</button>
+                <button id="btn-reset-1">Reset</button>
+            </div>
+            <div class="sim-status" id="status-1">
+                <span>cycle &nbsp;<span class="stat-val" id="cycle-1">0</span></span>
+                <span>temp &nbsp;&nbsp;<span class="stat-val" id="temp-1">25.0</span> °C</span>
+                <span>error &nbsp;<span class="stat-val" id="err-1">175.0</span></span>
+                <span>output <span class="stat-val" id="out-1">0.0</span> %</span>
+            </div>
+        </div>
+        <div class="sim-right">
+            <canvas id="graph-1" width="580" height="260"></canvas>
+        </div>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- ══════════════════════════════════════════ Section 2: Integral ═══ -->
+
+    <h2>2 — Integral Control</h2>
+    <p>
+        The steady-state error from Section 1 happens because proportional control only reacts
+        to the <em>current</em> error. Once the error is small, the output is small — even if
+        the temperature has been sitting below target for a long time.
+    </p>
+    <p>
+        The fix is to accumulate error over time. This is the <strong>integral</strong>. Every
+        cycle the temperature is below target, the integral grows a little. That growth adds
+        extra output, providing the push needed to close the gap all the way to zero.
+    </p>
+
+<pre><code>error     = targetTemp - currentTemp;
+integral += error;                        // sum up error over time
+output    = Kp * error + Ki * integral;  // P + I terms
+output    = clamp(output, 0, 100);</code></pre>
+
+    <p>
+        <strong>Ki</strong> is the <em>integral gain</em>. A well-tuned Ki eliminates
+        steady-state error entirely. But if Ki is too large, the accumulated integral can
+        grow enormous before the temperature catches up — then it dumps all of that stored
+        energy at once, rocketing the temperature well past the setpoint. This is called
+        <strong>integral windup</strong>.
+    </p>
+
+    <div class="hint">
+        <strong>Try it:</strong> Start with <strong>Kp = 2, Ki = 0.05</strong>. The temperature
+        now reaches the setpoint. Then push <strong>Ki to 0.3 or higher</strong> to see integral
+        windup — the accumulated sum drives a dramatic overshoot.
+    </div>
+
+    <div class="sim-panel">
+        <div class="sim-left">
+            <div class="sliders-row" id="sliders-2"></div>
+            <div class="sim-buttons">
+                <button id="btn-run-2">Run</button>
+                <button id="btn-step-2">Step</button>
+                <button id="btn-reset-2">Reset</button>
+            </div>
+            <div class="sim-status" id="status-2">
+                <span>cycle &nbsp;<span class="stat-val" id="cycle-2">0</span></span>
+                <span>temp &nbsp;&nbsp;<span class="stat-val" id="temp-2">25.0</span> °C</span>
+                <span>error &nbsp;<span class="stat-val" id="err-2">175.0</span></span>
+                <span>output <span class="stat-val" id="out-2">0.0</span> %</span>
+            </div>
+        </div>
+        <div class="sim-right">
+            <canvas id="graph-2" width="580" height="260"></canvas>
+        </div>
+    </div>
+
+    <hr class="section-divider">
+
+    <!-- ══════════════════════════════════════════ Section 3: Derivative ═══ -->
+
+    <h2>3 — Derivative Control</h2>
+    <p>
+        Even with a PI controller, the temperature can overshoot if the integral winds up or
+        the gains are aggressive. What we need is a way to <em>anticipate</em> where the system
+        is heading and start braking before it overshoots.
+    </p>
+    <p>
+        The <strong>derivative</strong> term does exactly this. It measures the
+        <em>rate of change</em> of the error — how fast the error is shrinking. When the
+        temperature is racing toward the setpoint, the derivative applies a countering force
+        to slow the approach. Think of it as the controller asking: "even if I'm not at the
+        setpoint yet, am I approaching it fast enough that I should ease off?"
+    </p>
+
+<pre><code>error      = targetTemp - currentTemp;
+integral  += error;
+derivative = error - prevError;          // rate of change of error
+output     = Kp * error
+           + Ki * integral
+           + Kd * derivative;           // full P + I + D
+output     = clamp(output, 0, 100);
+prevError  = error;                     // remember for next cycle</code></pre>
+
+    <p>
+        <strong>Kd</strong> is the <em>derivative gain</em>. It is the most sensitive of the
+        three terms. Too much Kd slows the response unnecessarily; in a real system it can also
+        amplify measurement noise and cause erratic heater behaviour.
+    </p>
+    <p>
+        With all three terms tuned together you can achieve a response that reaches the setpoint
+        quickly, settles cleanly without oscillation, and holds it there with no steady-state
+        error. This is the complete PID controller.
+    </p>
+
+    <div class="hint">
+        <strong>Try it:</strong> Start with <strong>Kp = 2, Ki = 0.05, Kd = 5</strong>
+        for a smooth, well-damped response — the payoff for all three sections. Then set
+        <strong>Kd to 0</strong> to watch oscillation return, or raise it past
+        <strong>20</strong> to see the derivative over-damp the approach.
+    </div>
+
+    <div class="sim-panel">
+        <div class="sim-left">
+            <div class="sliders-row" id="sliders-3"></div>
+            <div class="sim-buttons">
+                <button id="btn-run-3">Run</button>
+                <button id="btn-step-3">Step</button>
+                <button id="btn-reset-3">Reset</button>
+            </div>
+            <div class="sim-status" id="status-3">
+                <span>cycle &nbsp;<span class="stat-val" id="cycle-3">0</span></span>
+                <span>temp &nbsp;&nbsp;<span class="stat-val" id="temp-3">25.0</span> °C</span>
+                <span>error &nbsp;<span class="stat-val" id="err-3">175.0</span></span>
+                <span>output <span class="stat-val" id="out-3">0.0</span> %</span>
+            </div>
+        </div>
+        <div class="sim-right">
+            <canvas id="graph-3" width="580" height="260"></canvas>
+        </div>
+    </div>
+
+</div><!-- .page -->
+<!-- #endregion HTML -->
+
+<script>
+// #region JavaScript — TempGraph
+
+class TempGraph {
+    constructor(canvas) {
+        this.canvas      = canvas;
+        this.ctx         = canvas.getContext('2d');
+        this.points      = [];
+        this.setpointVal = 200;
+        this._draw();
+    }
+
+    setSetpoint(temp) {
+        this.setpointVal = temp;
+        this._draw();
+    }
+
+    addPoint(temp) {
+        this.points.push(temp);
+        this._draw();
+    }
+
+    clear() {
+        this.points = [];
+        this._draw();
+    }
+
+    _draw() {
+        const { canvas, ctx } = this;
+        const W   = canvas.width;
+        const H   = canvas.height;
+        const PAD = { top: 16, right: 44, bottom: 38, left: 44 };
+        const pw  = W - PAD.left - PAD.right;
+        const ph  = H - PAD.top  - PAD.bottom;
+        const MAX_T = 360;
+
+        const toX = i => PAD.left + (i / MAX_CYCLES) * pw;
+        const toY = t => PAD.top  + ph - Math.max(0, Math.min(1, t / MAX_T)) * ph;
+
+        // Background
+        ctx.fillStyle = '#080812';
+        ctx.fillRect(0, 0, W, H);
+
+        // Plot area
+        ctx.fillStyle = '#0c0c1e';
+        ctx.fillRect(PAD.left, PAD.top, pw, ph);
+
+        // Horizontal grid lines + Y labels
+        ctx.strokeStyle = '#1a1a32';
+        ctx.lineWidth = 1;
+        ctx.font = '10px monospace';
+        ctx.fillStyle = '#445';
+        ctx.textAlign = 'right';
+        for (let t = 0; t <= MAX_T; t += 60) {
+            const y = toY(t);
+            ctx.beginPath();
+            ctx.moveTo(PAD.left, y);
+            ctx.lineTo(PAD.left + pw, y);
+            ctx.stroke();
+            ctx.fillText(t, PAD.left - 5, y + 3.5);
+        }
+
+        // X labels
+        ctx.fillStyle = '#445';
+        ctx.textAlign = 'center';
+        for (let c = 0; c <= MAX_CYCLES; c += 100) {
+            ctx.fillText(c, toX(c), PAD.top + ph + 14);
+        }
+        ctx.fillText('cycles', PAD.left + pw / 2, PAD.top + ph + 28);
+
+        // Y axis label (rotated)
+        ctx.save();
+        ctx.fillStyle = '#445';
+        ctx.translate(13, PAD.top + ph / 2);
+        ctx.rotate(-Math.PI / 2);
+        ctx.textAlign = 'center';
+        ctx.fillText('°C', 0, 0);
+        ctx.restore();
+
+        // Setpoint line (dashed red)
+        const sy = toY(this.setpointVal);
+        ctx.save();
+        ctx.strokeStyle = '#ff6b6b';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([6, 5]);
+        ctx.beginPath();
+        ctx.moveTo(PAD.left, sy);
+        ctx.lineTo(PAD.left + pw, sy);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.restore();
+
+        // Setpoint label (right side)
+        ctx.fillStyle = '#ff6b6b';
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(Math.round(this.setpointVal) + '°', PAD.left + pw + 4, sy + 3.5);
+
+        // Temperature line
+        if (this.points.length > 1) {
+            ctx.strokeStyle = '#4fc3f7';
+            ctx.lineWidth = 2;
+            ctx.lineJoin  = 'round';
+            ctx.beginPath();
+            this.points.forEach((t, i) => {
+                const x = toX(i);
+                const y = toY(t);
+                if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            });
+            ctx.stroke();
+        }
+
+        // Axes (drawn last, on top of grid)
+        ctx.strokeStyle = '#2a2a44';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(PAD.left,      PAD.top);
+        ctx.lineTo(PAD.left,      PAD.top + ph);
+        ctx.lineTo(PAD.left + pw, PAD.top + ph);
+        ctx.stroke();
+
+        // Legend
+        const lx = PAD.left + pw - 4;
+        const ly = PAD.top + 10;
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'right';
+        ctx.fillStyle = '#4fc3f7';
+        ctx.fillText('── temp', lx, ly);
+        ctx.fillStyle = '#ff6b6b';
+        ctx.fillText('╌╌ setpoint', lx, ly + 14);
+    }
+}
+
+// #endregion
+
+
+// #region JavaScript — SliderInput
+
+class SliderInput {
+    constructor({ label, min, max, step, defaultValue, onChange }) {
+        this.min      = min;
+        this.max      = max;
+        this.step     = step;
+        this.value    = defaultValue;
+        this.onChange = onChange;
+
+        this.container = document.createElement('div');
+        this.container.className = 'slider-input';
+
+        this.slider = document.createElement('input');
+        this.slider.type      = 'range';
+        this.slider.min       = min;
+        this.slider.max       = max;
+        this.slider.step      = step;
+        this.slider.value     = defaultValue;
+        this.slider.className = 'vertical-slider';
+
+        this.numberInput = document.createElement('input');
+        this.numberInput.type      = 'number';
+        this.numberInput.min       = min;
+        this.numberInput.max       = max;
+        this.numberInput.step      = step;
+        this.numberInput.value     = defaultValue;
+        this.numberInput.className = 'slider-number';
+
+        const labelEl = document.createElement('div');
+        labelEl.className   = 'slider-label';
+        labelEl.textContent = label;
+
+        this.slider.addEventListener('input', () => {
+            this.value = parseFloat(this.slider.value);
+            this.numberInput.value = this.value;
+            this.onChange(this.value);
+        });
+
+        this.numberInput.addEventListener('change', () => {
+            let v = parseFloat(this.numberInput.value);
+            if (isNaN(v)) return;
+            v = Math.max(this.min, Math.min(this.max, v));
+            this.value             = v;
+            this.slider.value      = v;
+            this.numberInput.value = v;
+            this.onChange(this.value);
+        });
+
+        this.container.appendChild(this.slider);
+        this.container.appendChild(this.numberInput);
+        this.container.appendChild(labelEl);
+    }
+
+    getValue() { return this.value; }
+}
+
+// #endregion
+
+
+// #region JavaScript — PIDSimulation
+
+const MAX_CYCLES = 500;
+
+class PIDSimulation {
+    // Physical constants — FDM hotend model (not exposed to user)
+    static HEATING_COEFF = 2.5;    // °C per cycle at 100% heater power
+    static COOLING_COEFF = 0.008;  // fraction of excess heat above ambient lost per cycle
+    static AMBIENT       = 25;     // °C — ambient air temperature
+    static DT            = 1;      // timestep (each cycle = 1 unit of simulation time)
+    static MAX_HEATER    = 100;    // heater output ceiling (%)
+    static MIN_HEATER    = 0;      // heater output floor (%)
+
+    constructor(graph) {
+        this.graph       = graph;
+        this.kp          = 0;
+        this.ki          = 0;
+        this.kd          = 0;
+        this.targetTemp  = 200;
+        this.initialTemp = 25;
+        this._intervalId = null;
+        this._initState();
+    }
+
+    // --- Configuration setters ---
+
+    setKp(v) { this.kp = v; }
+    setKi(v) { this.ki = v; }
+    setKd(v) { this.kd = v; }
+
+    setTargetTemp(v) {
+        this.targetTemp = v;
+        this.graph.setSetpoint(v);
+    }
+
+    setInitialTemp(v) {
+        this.initialTemp = v;
+    }
+
+    // --- Internal state initialisation ---
+
+    _initState() {
+        this.currentTemp  = this.initialTemp;
+        this.integral     = 0;
+        this.prevError    = 0;
+        this.lastOutput   = 0;
+        this.cycle        = 0;
+        this.running      = false;
+    }
+
+    // --- Public API ---
+
+    step() {
+        if (this.cycle >= MAX_CYCLES) return false;
+
+        const { DT, HEATING_COEFF, COOLING_COEFF, AMBIENT, MAX_HEATER, MIN_HEATER } = PIDSimulation;
+
+        const error       = this.targetTemp - this.currentTemp;
+        this.integral    += error * DT;
+        const derivative  = (error - this.prevError) / DT;
+        this.prevError    = error;
+
+        let output = this.kp * error + this.ki * this.integral + this.kd * derivative;
+        output     = Math.max(MIN_HEATER, Math.min(MAX_HEATER, output));
+        this.lastOutput = output;
+
+        const heating = (output / 100) * HEATING_COEFF;
+        const cooling  = (this.currentTemp - AMBIENT) * COOLING_COEFF;
+        this.currentTemp += (heating - cooling) * DT;
+
+        this.graph.addPoint(this.currentTemp);
+        this.cycle++;
+        return this.cycle < MAX_CYCLES;
+    }
+
+    run(onUpdate, onDone) {
+        if (this.running) return;
+        this.running = true;
+        this._intervalId = setInterval(() => {
+            const cont = this.step();
+            if (onUpdate) onUpdate();
+            if (!cont) {
+                this.stop();
+                if (onDone) onDone();
+            }
+        }, 20); // ~50 steps/sec
+    }
+
+    stop() {
+        this.running = false;
+        if (this._intervalId) {
+            clearInterval(this._intervalId);
+            this._intervalId = null;
+        }
+    }
+
+    reset() {
+        this.stop();
+        this._initState();
+        this.graph.clear();
+        this.graph.setSetpoint(this.targetTemp);
+    }
+
+    isRunning()  { return this.running; }
+    isFinished() { return this.cycle >= MAX_CYCLES; }
+    getCycle()   { return this.cycle; }
+    getTemp()    { return this.currentTemp; }
+    getError()   { return this.targetTemp - this.currentTemp; }
+    getOutput()  { return this.lastOutput; }
+}
+
+// #endregion
+
+
+// #region JavaScript — Section1 (P only)
+
+class Section1 {
+    constructor() {
+        const canvas  = document.getElementById('graph-1');
+        this.graph    = new TempGraph(canvas);
+        this.sim      = new PIDSimulation(this.graph);
+
+        this.kpSlider = new SliderInput({
+            label: 'Kp',        min: 0, max: 10,  step: 0.1, defaultValue: 2.0,
+            onChange: v => this.sim.setKp(v)
+        });
+        this.targetSlider = new SliderInput({
+            label: 'Target\n°C', min: 0, max: 300, step: 1,   defaultValue: 200,
+            onChange: v => this.sim.setTargetTemp(v)
+        });
+        this.initialSlider = new SliderInput({
+            label: 'Initial\n°C', min: 0, max: 300, step: 1,  defaultValue: 25,
+            onChange: v => this.sim.setInitialTemp(v)
+        });
+
+        const row = document.getElementById('sliders-1');
+        row.appendChild(this.kpSlider.container);
+        row.appendChild(this.targetSlider.container);
+        row.appendChild(this.initialSlider.container);
+
+        this.sim.setKp(2.0);
+        this.sim.setTargetTemp(200);
+        this.sim.setInitialTemp(25);
+        this.sim.reset();
+
+        this._wireButtons(
+            document.getElementById('btn-run-1'),
+            document.getElementById('btn-step-1'),
+            document.getElementById('btn-reset-1'),
+            document.getElementById('cycle-1'),
+            document.getElementById('temp-1'),
+            document.getElementById('err-1'),
+            document.getElementById('out-1')
+        );
+    }
+
+    _wireButtons(runBtn, stepBtn, resetBtn, cycleEl, tempEl, errEl, outEl) {
+        const updateStatus = () => {
+            cycleEl.textContent = this.sim.getCycle();
+            tempEl.textContent  = this.sim.getTemp().toFixed(1);
+            errEl.textContent   = this.sim.getError().toFixed(1);
+            outEl.textContent   = this.sim.getOutput().toFixed(1);
+        };
+
+        runBtn.addEventListener('click', () => {
+            if (this.sim.isRunning()) {
+                this.sim.stop();
+                runBtn.textContent = 'Run';
+                runBtn.classList.remove('btn-active');
+            } else {
+                if (this.sim.isFinished()) { this.sim.reset(); updateStatus(); }
+                runBtn.textContent = 'Stop';
+                runBtn.classList.add('btn-active');
+                this.sim.run(
+                    () => updateStatus(),
+                    () => { runBtn.textContent = 'Run'; runBtn.classList.remove('btn-active'); }
+                );
+            }
+        });
+
+        stepBtn.addEventListener('click', () => {
+            if (!this.sim.isRunning()) { this.sim.step(); updateStatus(); }
+        });
+
+        resetBtn.addEventListener('click', () => {
+            this.sim.reset();
+            runBtn.textContent = 'Run';
+            runBtn.classList.remove('btn-active');
+            updateStatus();
+        });
+
+        updateStatus();
+    }
+}
+
+// #endregion
+
+
+// #region JavaScript — Section2 (PI)
+
+class Section2 {
+    constructor() {
+        const canvas  = document.getElementById('graph-2');
+        this.graph    = new TempGraph(canvas);
+        this.sim      = new PIDSimulation(this.graph);
+
+        this.kpSlider = new SliderInput({
+            label: 'Kp',        min: 0, max: 10,  step: 0.1,  defaultValue: 2.0,
+            onChange: v => this.sim.setKp(v)
+        });
+        this.kiSlider = new SliderInput({
+            label: 'Ki',        min: 0, max: 1.0, step: 0.01, defaultValue: 0.05,
+            onChange: v => this.sim.setKi(v)
+        });
+        this.targetSlider = new SliderInput({
+            label: 'Target\n°C', min: 0, max: 300, step: 1,   defaultValue: 200,
+            onChange: v => this.sim.setTargetTemp(v)
+        });
+        this.initialSlider = new SliderInput({
+            label: 'Initial\n°C', min: 0, max: 300, step: 1,  defaultValue: 25,
+            onChange: v => this.sim.setInitialTemp(v)
+        });
+
+        const row = document.getElementById('sliders-2');
+        row.appendChild(this.kpSlider.container);
+        row.appendChild(this.kiSlider.container);
+        row.appendChild(this.targetSlider.container);
+        row.appendChild(this.initialSlider.container);
+
+        this.sim.setKp(2.0);
+        this.sim.setKi(0.05);
+        this.sim.setTargetTemp(200);
+        this.sim.setInitialTemp(25);
+        this.sim.reset();
+
+        this._wireButtons(
+            document.getElementById('btn-run-2'),
+            document.getElementById('btn-step-2'),
+            document.getElementById('btn-reset-2'),
+            document.getElementById('cycle-2'),
+            document.getElementById('temp-2'),
+            document.getElementById('err-2'),
+            document.getElementById('out-2')
+        );
+    }
+
+    _wireButtons(runBtn, stepBtn, resetBtn, cycleEl, tempEl, errEl, outEl) {
+        const updateStatus = () => {
+            cycleEl.textContent = this.sim.getCycle();
+            tempEl.textContent  = this.sim.getTemp().toFixed(1);
+            errEl.textContent   = this.sim.getError().toFixed(1);
+            outEl.textContent   = this.sim.getOutput().toFixed(1);
+        };
+
+        runBtn.addEventListener('click', () => {
+            if (this.sim.isRunning()) {
+                this.sim.stop();
+                runBtn.textContent = 'Run';
+                runBtn.classList.remove('btn-active');
+            } else {
+                if (this.sim.isFinished()) { this.sim.reset(); updateStatus(); }
+                runBtn.textContent = 'Stop';
+                runBtn.classList.add('btn-active');
+                this.sim.run(
+                    () => updateStatus(),
+                    () => { runBtn.textContent = 'Run'; runBtn.classList.remove('btn-active'); }
+                );
+            }
+        });
+
+        stepBtn.addEventListener('click', () => {
+            if (!this.sim.isRunning()) { this.sim.step(); updateStatus(); }
+        });
+
+        resetBtn.addEventListener('click', () => {
+            this.sim.reset();
+            runBtn.textContent = 'Run';
+            runBtn.classList.remove('btn-active');
+            updateStatus();
+        });
+
+        updateStatus();
+    }
+}
+
+// #endregion
+
+
+// #region JavaScript — Section3 (PID)
+
+class Section3 {
+    constructor() {
+        const canvas  = document.getElementById('graph-3');
+        this.graph    = new TempGraph(canvas);
+        this.sim      = new PIDSimulation(this.graph);
+
+        this.kpSlider = new SliderInput({
+            label: 'Kp',        min: 0, max: 10,  step: 0.1,  defaultValue: 2.0,
+            onChange: v => this.sim.setKp(v)
+        });
+        this.kiSlider = new SliderInput({
+            label: 'Ki',        min: 0, max: 1.0, step: 0.01, defaultValue: 0.05,
+            onChange: v => this.sim.setKi(v)
+        });
+        this.kdSlider = new SliderInput({
+            label: 'Kd',        min: 0, max: 30,  step: 0.5,  defaultValue: 5.0,
+            onChange: v => this.sim.setKd(v)
+        });
+        this.targetSlider = new SliderInput({
+            label: 'Target\n°C', min: 0, max: 300, step: 1,   defaultValue: 200,
+            onChange: v => this.sim.setTargetTemp(v)
+        });
+        this.initialSlider = new SliderInput({
+            label: 'Initial\n°C', min: 0, max: 300, step: 1,  defaultValue: 25,
+            onChange: v => this.sim.setInitialTemp(v)
+        });
+
+        const row = document.getElementById('sliders-3');
+        row.appendChild(this.kpSlider.container);
+        row.appendChild(this.kiSlider.container);
+        row.appendChild(this.kdSlider.container);
+        row.appendChild(this.targetSlider.container);
+        row.appendChild(this.initialSlider.container);
+
+        this.sim.setKp(2.0);
+        this.sim.setKi(0.05);
+        this.sim.setKd(5.0);
+        this.sim.setTargetTemp(200);
+        this.sim.setInitialTemp(25);
+        this.sim.reset();
+
+        this._wireButtons(
+            document.getElementById('btn-run-3'),
+            document.getElementById('btn-step-3'),
+            document.getElementById('btn-reset-3'),
+            document.getElementById('cycle-3'),
+            document.getElementById('temp-3'),
+            document.getElementById('err-3'),
+            document.getElementById('out-3')
+        );
+    }
+
+    _wireButtons(runBtn, stepBtn, resetBtn, cycleEl, tempEl, errEl, outEl) {
+        const updateStatus = () => {
+            cycleEl.textContent = this.sim.getCycle();
+            tempEl.textContent  = this.sim.getTemp().toFixed(1);
+            errEl.textContent   = this.sim.getError().toFixed(1);
+            outEl.textContent   = this.sim.getOutput().toFixed(1);
+        };
+
+        runBtn.addEventListener('click', () => {
+            if (this.sim.isRunning()) {
+                this.sim.stop();
+                runBtn.textContent = 'Run';
+                runBtn.classList.remove('btn-active');
+            } else {
+                if (this.sim.isFinished()) { this.sim.reset(); updateStatus(); }
+                runBtn.textContent = 'Stop';
+                runBtn.classList.add('btn-active');
+                this.sim.run(
+                    () => updateStatus(),
+                    () => { runBtn.textContent = 'Run'; runBtn.classList.remove('btn-active'); }
+                );
+            }
+        });
+
+        stepBtn.addEventListener('click', () => {
+            if (!this.sim.isRunning()) { this.sim.step(); updateStatus(); }
+        });
+
+        resetBtn.addEventListener('click', () => {
+            this.sim.reset();
+            runBtn.textContent = 'Run';
+            runBtn.classList.remove('btn-active');
+            updateStatus();
+        });
+
+        updateStatus();
+    }
+}
+
+// #endregion
+
+
+// --- Bootstrap ---
+document.addEventListener('DOMContentLoaded', () => {
+    new Section1();
+    new Section2();
+    new Section3();
+});
+</script>
+
+</body>
+</html>
