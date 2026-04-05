@@ -1220,9 +1220,9 @@ class Section3 {
         row.appendChild(this.targetSlider.container);
         row.appendChild(this.initialSlider.container);
 
-        this.sim.setKp(2.0);
-        this.sim.setKi(0.05);
-        this.sim.setKd(5.0);
+        this.sim.setKp(0.0);
+        this.sim.setKi(0.0);
+        this.sim.setKd(0.0);
         this.sim.setTargetTemp(200);
         this.sim.setInitialTemp(25);
         this.sim.reset();
