@@ -579,6 +579,64 @@ prevError  = error;                     // remember for next cycle</code></pre>
         </div>
     </div>
 
+    <hr class="section-divider">
+
+    <!-- ══════════════════════════════════════════════ Tuning guide ═══ -->
+
+    <h2>Tuning guide</h2>
+    <p>
+        Not sure where to start, or why your graph looks wrong? Match what you're seeing
+        to the symptoms below.
+    </p>
+
+    <h3>The temperature barely moves</h3>
+    <p>
+        Kp is too low. Proportional gain is what gets the heater moving in the first place —
+        without it, the other two terms can't do much either. Raise Kp until you see a
+        meaningful response.
+    </p>
+
+    <h3>The temperature climbs but stops short of the target and stays there</h3>
+    <p>
+        This is steady-state error — proportional control doing exactly what it's designed
+        to do, and hitting its limit. Add a small Ki to close the remaining gap.
+    </p>
+
+    <h3>The temperature shoots past the target and oscillates</h3>
+    <p>
+        Either Kp is too high, or Ki has caused windup. Lower Kp first. If the I term
+        display was red during the run, lower Ki too. Once the oscillation is under control,
+        add a small Kd to dampen the swings.
+    </p>
+
+    <h3>The temperature overshoots once, then settles slowly</h3>
+    <p>
+        This is actually fine behaviour. If you want it to settle faster without more
+        overshoot, raise Kd slightly. If it starts oscillating again, you've gone too far.
+    </p>
+
+    <h3>The I term display turns red immediately</h3>
+    <p>
+        Ki is too large. The integral is accumulating faster than the heater can act on it.
+        Bring Ki down until the display stays below 100% during a normal run.
+    </p>
+
+    <h3>The temperature oscillates rapidly with very short peaks and valleys</h3>
+    <p>
+        Kd is too high. The derivative term is overreacting to small changes in error and
+        fighting itself. Reduce Kd, or set it to zero and re-tune Kp and Ki before
+        adding it back.
+    </p>
+
+    <h3>General approach when starting from scratch</h3>
+    <ol style="margin-left:1.4rem; margin-bottom:1rem;">
+        <li>Set Ki and Kd to zero.</li>
+        <li>Raise Kp until the temperature reaches the setpoint — accept some overshoot for now.</li>
+        <li>Add a small Ki to eliminate any remaining gap below the target.</li>
+        <li>Add a small Kd to smooth out overshoot. Increase gradually.</li>
+        <li>Fine-tune all three until the response looks clean.</li>
+    </ol>
+
 </div><!-- .page -->
 <!-- #endregion HTML -->
 
@@ -1135,15 +1193,15 @@ class Section3 {
         );
 
         this.kpSlider = new SliderInput({
-            label: 'Kp',        min: 0, max: 10,  step: 0.1,  defaultValue: 0,
+            label: 'Kp',        min: 0, max: 10,  step: 0.1,  defaultValue: 2.0,
             onChange: v => this.sim.setKp(v)
         });
         this.kiSlider = new SliderInput({
-            label: 'Ki',        min: 0, max: 1.0, step: 0.01, defaultValue: 0,
+            label: 'Ki',        min: 0, max: 1.0, step: 0.01, defaultValue: 0.05,
             onChange: v => this.sim.setKi(v)
         });
         this.kdSlider = new SliderInput({
-            label: 'Kd',        min: 0, max: 30,  step: 0.5,  defaultValue: 0,
+            label: 'Kd',        min: 0, max: 30,  step: 0.5,  defaultValue: 5.0,
             onChange: v => this.sim.setKd(v)
         });
         this.targetSlider = new SliderInput({
@@ -1151,7 +1209,7 @@ class Section3 {
             onChange: v => this.sim.setTargetTemp(v)
         });
         this.initialSlider = new SliderInput({
-            label: 'Initial\n°C', min: 0, max: 300, step: 1,  defaultValue: 0,
+            label: 'Initial\n°C', min: 0, max: 300, step: 1,  defaultValue: 25,
             onChange: v => this.sim.setInitialTemp(v)
         });
 
@@ -1162,11 +1220,11 @@ class Section3 {
         row.appendChild(this.targetSlider.container);
         row.appendChild(this.initialSlider.container);
 
-        this.sim.setKp(0);
-        this.sim.setKi(0);
-        this.sim.setKd(0);
+        this.sim.setKp(2.0);
+        this.sim.setKi(0.05);
+        this.sim.setKd(5.0);
         this.sim.setTargetTemp(200);
-        this.sim.setInitialTemp(0);
+        this.sim.setInitialTemp(25);
         this.sim.reset();
 
         this._wireButtons(
