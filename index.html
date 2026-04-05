@@ -291,50 +291,8 @@
 
     /* --- Integral display --- */
 
-    .graph-row {
-        display: flex;
-        gap: 0.8rem;
-        align-items: stretch;
-    }
-
-    .graph-row canvas {
-        flex: 1;
-        min-width: 0;
-        display: block;
-        border-radius: 4px;
-    }
-
-    .integral-display {
-        width: 76px;
-        flex-shrink: 0;
-        background: var(--panel);
-        border: 1px solid var(--border);
-        border-radius: 4px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        gap: 0.5rem;
-        padding: 0.6rem 0.4rem;
-        font-family: 'Courier New', monospace;
-    }
-
-    .integral-display .id-label {
-        font-size: 0.7rem;
-        color: var(--muted);
-        text-align: center;
-        line-height: 1.3;
-    }
-
-    .integral-display .id-value {
-        font-size: 1.15rem;
-        font-weight: bold;
-        color: var(--accent2);
-        text-align: center;
-    }
-
-    .integral-display .id-value.over-limit {
-        color: var(--warn);
+    .stat-val.over-limit {
+        color: var(--warn) !important;
     }
 
     /* #endregion */
@@ -499,17 +457,11 @@ output    = clamp(output, 0, 100);</code></pre>
                 <span>temp &nbsp;&nbsp;<span class="stat-val" id="temp-2">25.0</span> °C</span>
                 <span>error &nbsp;<span class="stat-val" id="err-2">175.0</span></span>
                 <span>output <span class="stat-val" id="out-2">0.0</span> %</span>
+                <span>I term &nbsp;<span class="stat-val" id="integral-val-2">—</span></span>
             </div>
         </div>
         <div class="sim-right">
-            <div class="graph-row">
-                <canvas id="graph-2" width="580" height="260"></canvas>
-                <div id="integral-display-2" class="integral-display">
-                    <div class="id-label">I term</div>
-                    <div class="id-value" id="integral-val-2">—</div>
-                    <div class="id-label">% of<br>heater</div>
-                </div>
-            </div>
+            <canvas id="graph-2" width="580" height="260"></canvas>
         </div>
     </div>
 
@@ -572,17 +524,11 @@ prevError  = error;                     // remember for next cycle</code></pre>
                 <span>temp &nbsp;&nbsp;<span class="stat-val" id="temp-3">25.0</span> °C</span>
                 <span>error &nbsp;<span class="stat-val" id="err-3">175.0</span></span>
                 <span>output <span class="stat-val" id="out-3">0.0</span> %</span>
+                <span>I term &nbsp;<span class="stat-val" id="integral-val-3">—</span></span>
             </div>
         </div>
         <div class="sim-right">
-            <div class="graph-row">
-                <canvas id="graph-3" width="580" height="260"></canvas>
-                <div id="integral-display-3" class="integral-display">
-                    <div class="id-label">I term</div>
-                    <div class="id-value" id="integral-val-3">—</div>
-                    <div class="id-label">% of<br>heater</div>
-                </div>
-            </div>
+            <canvas id="graph-3" width="580" height="260"></canvas>
         </div>
     </div>
 
@@ -1289,9 +1235,25 @@ class Section3 {
 
 // --- Bootstrap ---
 document.addEventListener('DOMContentLoaded', () => {
-    new Section1();
-    new Section2();
-    new Section3();
+    const sections = [new Section1(), new Section2(), new Section3()];
+
+    // Firefox defers compositing off-screen canvases, so a render call at load
+    // time is silently discarded for anything below the fold. Use
+    // IntersectionObserver to render each graph the first time it scrolls into
+    // view, which forces Firefox to flush the canvas to the screen.
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const section = sections.find(s => s.sim.graph.canvas === entry.target);
+                if (section) {
+                    section.sim.render();
+                    observer.unobserve(entry.target);
+                }
+            }
+        });
+    }, { threshold: 0.01 });
+
+    sections.forEach(s => observer.observe(s.sim.graph.canvas));
 });
 </script>
 
