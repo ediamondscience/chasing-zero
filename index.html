@@ -1209,7 +1209,7 @@ class Section3 {
             onChange: v => this.sim.setTargetTemp(v)
         });
         this.initialSlider = new SliderInput({
-            label: 'Initial\n°C', min: 0, max: 300, step: 1,  defaultValue: 25,
+            label: 'Initial\n°C', min: 0, max: 300, step: 1,  defaultValue: 0,
             onChange: v => this.sim.setInitialTemp(v)
         });
 
@@ -1220,11 +1220,11 @@ class Section3 {
         row.appendChild(this.targetSlider.container);
         row.appendChild(this.initialSlider.container);
 
-        this.sim.setKp(0.0);
-        this.sim.setKi(0.0);
-        this.sim.setKd(0.0);
+        this.sim.setKp(0);
+        this.sim.setKi(0);
+        this.sim.setKd(0);
         this.sim.setTargetTemp(200);
-        this.sim.setInitialTemp(25);
+        this.sim.setInitialTemp(0);
         this.sim.reset();
 
         this._wireButtons(
