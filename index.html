@@ -108,13 +108,37 @@
         background: var(--surface);
         border-left: 3px solid var(--accent2);
         padding: 0.9rem 1.1rem;
-        margin: 1.2rem 0 1.6rem;
+        margin: 1.2rem 0 1rem;
         border-radius: 0 5px 5px 0;
         font-size: 0.92rem;
         color: var(--muted);
     }
 
     .hint strong { color: var(--accent2); }
+
+    details.hint summary {
+        cursor: pointer;
+        font-weight: bold;
+        color: var(--accent2);
+        list-style: none;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+        user-select: none;
+    }
+
+    details.hint summary::-webkit-details-marker { display: none; }
+
+    details.hint summary::before {
+        content: '▶';
+        font-size: 0.65em;
+        display: inline-block;
+        transition: transform 0.15s;
+    }
+
+    details.hint[open] summary::before { transform: rotate(90deg); }
+
+    details.hint > *:not(summary) { margin-top: 0.7rem; }
 
     .section-divider {
         border: none;
@@ -153,7 +177,8 @@
         min-width: 0;
     }
 
-    .sim-right canvas {
+    /* Section 1 has no .graph-row wrapper, so target its canvas directly */
+    .sim-right > canvas {
         display: block;
         width: 100%;
         border-radius: 4px;
@@ -257,6 +282,54 @@
     .sim-status .stat-val { color: var(--accent); }
     .sim-status .stat-warn { color: var(--warn); }
 
+    /* --- Integral display --- */
+
+    .graph-row {
+        display: flex;
+        gap: 0.8rem;
+        align-items: stretch;
+    }
+
+    .graph-row canvas {
+        flex: 1;
+        min-width: 0;
+        display: block;
+        border-radius: 4px;
+    }
+
+    .integral-display {
+        width: 76px;
+        flex-shrink: 0;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        padding: 0.6rem 0.4rem;
+        font-family: 'Courier New', monospace;
+    }
+
+    .integral-display .id-label {
+        font-size: 0.7rem;
+        color: var(--muted);
+        text-align: center;
+        line-height: 1.3;
+    }
+
+    .integral-display .id-value {
+        font-size: 1.15rem;
+        font-weight: bold;
+        color: var(--accent2);
+        text-align: center;
+    }
+
+    .integral-display .id-value.over-limit {
+        color: var(--warn);
+    }
+
     /* #endregion */
     </style>
 </head>
@@ -332,11 +405,12 @@ output = clamp(output, 0, 100); // heater can't go below 0% or above 100%</code>
         past the target and then has to correct back, leading to oscillation.
     </p>
 
-    <div class="hint">
-        <strong>Try it:</strong> Start with <strong>Kp = 2</strong>. Notice how the temperature
-        levels off just below the setpoint — that is steady-state error. Then push
-        <strong>Kp to 5 or higher</strong> and watch the temperature swing past the target.
-    </div>
+    <details class="hint">
+        <summary>Need a hint?</summary>
+        <p>Start with <strong>Kp = 2</strong>. Notice how the temperature levels off just below
+        the setpoint — that is steady-state error. Then push <strong>Kp to 5 or higher</strong>
+        and watch the temperature swing past the target.</p>
+    </details>
 
     <div class="sim-panel">
         <div class="sim-left">
@@ -387,11 +461,23 @@ output    = clamp(output, 0, 100);</code></pre>
         <strong>integral windup</strong>.
     </p>
 
-    <div class="hint">
-        <strong>Try it:</strong> Start with <strong>Kp = 2, Ki = 0.05</strong>. The temperature
-        now reaches the setpoint. Then push <strong>Ki to 0.3 or higher</strong> to see integral
-        windup — the accumulated sum drives a dramatic overshoot.
-    </div>
+    <details class="hint">
+        <summary>What does the I term display mean?</summary>
+        <p>The box to the right of the graph shows how much heater output the integral term is
+        commanding on its own, as a percentage. The heater is capped at 100% — but the integral
+        doesn't know that. It just keeps accumulating.</p>
+        <p>When the display turns <strong style="color:var(--warn)">red</strong>, the integral is
+        demanding more than the heater can physically deliver. All that extra demand is stored up
+        and keeps the heater pinned at full power long after the temperature has blown past the
+        setpoint. That is integral windup.</p>
+    </details>
+
+    <details class="hint">
+        <summary>Need a hint?</summary>
+        <p>Start with <strong>Kp = 2, Ki = 0.05</strong>. The temperature now reaches the
+        setpoint. Then push <strong>Ki to 0.3 or higher</strong> to see integral windup — watch
+        the I term display turn red and the temperature rocket past the target.</p>
+    </details>
 
     <div class="sim-panel">
         <div class="sim-left">
@@ -409,7 +495,14 @@ output    = clamp(output, 0, 100);</code></pre>
             </div>
         </div>
         <div class="sim-right">
-            <canvas id="graph-2" width="580" height="260"></canvas>
+            <div class="graph-row">
+                <canvas id="graph-2" width="580" height="260"></canvas>
+                <div id="integral-display-2" class="integral-display">
+                    <div class="id-label">I term</div>
+                    <div class="id-value" id="integral-val-2">—</div>
+                    <div class="id-label">% of<br>heater</div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -451,12 +544,13 @@ prevError  = error;                     // remember for next cycle</code></pre>
         error. This is the complete PID controller.
     </p>
 
-    <div class="hint">
-        <strong>Try it:</strong> Start with <strong>Kp = 2, Ki = 0.05, Kd = 5</strong>
-        for a smooth, well-damped response — the payoff for all three sections. Then set
-        <strong>Kd to 0</strong> to watch oscillation return, or raise it past
-        <strong>20</strong> to see the derivative over-damp the approach.
-    </div>
+    <details class="hint">
+        <summary>Need a hint?</summary>
+        <p>Start with <strong>Kp = 2, Ki = 0.05, Kd = 5</strong> for a smooth, well-damped
+        response — the payoff for all three sections. Then set <strong>Kd to 0</strong> to
+        watch oscillation return, or raise it past <strong>20</strong> to see the derivative
+        over-damp the approach.</p>
+    </details>
 
     <div class="sim-panel">
         <div class="sim-left">
@@ -474,7 +568,14 @@ prevError  = error;                     // remember for next cycle</code></pre>
             </div>
         </div>
         <div class="sim-right">
-            <canvas id="graph-3" width="580" height="260"></canvas>
+            <div class="graph-row">
+                <canvas id="graph-3" width="580" height="260"></canvas>
+                <div id="integral-display-3" class="integral-display">
+                    <div class="id-label">I term</div>
+                    <div class="id-value" id="integral-val-3">—</div>
+                    <div class="id-label">% of<br>heater</div>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -500,6 +601,13 @@ class TempGraph {
 
     addPoint(temp) {
         this.points.push(temp);
+        // No draw here — rendering is the caller's responsibility.
+        // Keeping data mutation and canvas drawing as separate concerns
+        // ensures the canvas is only ever updated at an explicit render call,
+        // not as a hidden side-effect buried inside a simulation step.
+    }
+
+    render() {
         this._draw();
     }
 
@@ -617,6 +725,33 @@ class TempGraph {
 // #endregion
 
 
+// #region JavaScript — IntegralDisplay
+
+class IntegralDisplay {
+    constructor(valueEl) {
+        this.valueEl = valueEl;
+    }
+
+    update(percentage) {
+        this.valueEl.textContent = percentage.toFixed(1) + '%';
+        // Turn red when the I term alone exceeds what the heater can deliver,
+        // making windup immediately visible to students.
+        if (Math.abs(percentage) > 100) {
+            this.valueEl.classList.add('over-limit');
+        } else {
+            this.valueEl.classList.remove('over-limit');
+        }
+    }
+
+    clear() {
+        this.valueEl.textContent = '—';
+        this.valueEl.classList.remove('over-limit');
+    }
+}
+
+// #endregion
+
+
 // #region JavaScript — SliderInput
 
 class SliderInput {
@@ -691,14 +826,19 @@ class PIDSimulation {
     static MIN_HEATER    = 0;      // heater output floor (%)
 
     constructor(graph) {
-        this.graph       = graph;
-        this.kp          = 0;
-        this.ki          = 0;
-        this.kd          = 0;
-        this.targetTemp  = 200;
-        this.initialTemp = 25;
-        this._intervalId = null;
+        this.graph           = graph;
+        this.integralDisplay = null;
+        this.kp              = 0;
+        this.ki              = 0;
+        this.kd              = 0;
+        this.targetTemp      = 200;
+        this.initialTemp     = 25;
+        this._intervalId     = null;
         this._initState();
+    }
+
+    setIntegralDisplay(display) {
+        this.integralDisplay = display;
     }
 
     // --- Configuration setters ---
@@ -721,7 +861,11 @@ class PIDSimulation {
     _initState() {
         this.currentTemp  = this.initialTemp;
         this.integral     = 0;
-        this.prevError    = 0;
+        // Initialise prevError to the actual starting error, not zero.
+        // If we start at zero, the first derivative term sees (error − 0) = the
+        // full initial error as an instantaneous "rate of change", producing an
+        // artificial spike that corrupts the integral from cycle one onward.
+        this.prevError    = this.targetTemp - this.initialTemp;
         this.lastOutput   = 0;
         this.cycle        = 0;
         this.running      = false;
@@ -748,8 +892,15 @@ class PIDSimulation {
         this.currentTemp += (heating - cooling) * DT;
 
         this.graph.addPoint(this.currentTemp);
+        if (this.integralDisplay) {
+            this.integralDisplay.update(this.ki * this.integral);
+        }
         this.cycle++;
         return this.cycle < MAX_CYCLES;
+    }
+
+    render() {
+        this.graph.render();
     }
 
     run(onUpdate, onDone) {
@@ -757,12 +908,13 @@ class PIDSimulation {
         this.running = true;
         this._intervalId = setInterval(() => {
             const cont = this.step();
+            this.render();
             if (onUpdate) onUpdate();
             if (!cont) {
                 this.stop();
                 if (onDone) onDone();
             }
-        }, 20); // ~50 steps/sec
+        }, 20);
     }
 
     stop() {
@@ -778,6 +930,9 @@ class PIDSimulation {
         this._initState();
         this.graph.clear();
         this.graph.setSetpoint(this.targetTemp);
+        if (this.integralDisplay) {
+            this.integralDisplay.clear();
+        }
     }
 
     isRunning()  { return this.running; }
@@ -800,7 +955,7 @@ class Section1 {
         this.sim      = new PIDSimulation(this.graph);
 
         this.kpSlider = new SliderInput({
-            label: 'Kp',        min: 0, max: 10,  step: 0.1, defaultValue: 2.0,
+            label: 'Kp',        min: 0, max: 10,  step: 0.1, defaultValue: 0,
             onChange: v => this.sim.setKp(v)
         });
         this.targetSlider = new SliderInput({
@@ -808,7 +963,7 @@ class Section1 {
             onChange: v => this.sim.setTargetTemp(v)
         });
         this.initialSlider = new SliderInput({
-            label: 'Initial\n°C', min: 0, max: 300, step: 1,  defaultValue: 25,
+            label: 'Initial\n°C', min: 0, max: 300, step: 1,  defaultValue: 0,
             onChange: v => this.sim.setInitialTemp(v)
         });
 
@@ -817,9 +972,9 @@ class Section1 {
         row.appendChild(this.targetSlider.container);
         row.appendChild(this.initialSlider.container);
 
-        this.sim.setKp(2.0);
+        this.sim.setKp(0);
         this.sim.setTargetTemp(200);
-        this.sim.setInitialTemp(25);
+        this.sim.setInitialTemp(0);
         this.sim.reset();
 
         this._wireButtons(
@@ -858,7 +1013,7 @@ class Section1 {
         });
 
         stepBtn.addEventListener('click', () => {
-            if (!this.sim.isRunning()) { this.sim.step(); updateStatus(); }
+            if (!this.sim.isRunning()) { this.sim.step(); this.sim.render(); updateStatus(); }
         });
 
         resetBtn.addEventListener('click', () => {
@@ -882,13 +1037,16 @@ class Section2 {
         const canvas  = document.getElementById('graph-2');
         this.graph    = new TempGraph(canvas);
         this.sim      = new PIDSimulation(this.graph);
+        this.sim.setIntegralDisplay(
+            new IntegralDisplay(document.getElementById('integral-val-2'))
+        );
 
         this.kpSlider = new SliderInput({
-            label: 'Kp',        min: 0, max: 10,  step: 0.1,  defaultValue: 2.0,
+            label: 'Kp',        min: 0, max: 10,  step: 0.1,  defaultValue: 0,
             onChange: v => this.sim.setKp(v)
         });
         this.kiSlider = new SliderInput({
-            label: 'Ki',        min: 0, max: 1.0, step: 0.01, defaultValue: 0.05,
+            label: 'Ki',        min: 0, max: 1.0, step: 0.01, defaultValue: 0,
             onChange: v => this.sim.setKi(v)
         });
         this.targetSlider = new SliderInput({
@@ -896,7 +1054,7 @@ class Section2 {
             onChange: v => this.sim.setTargetTemp(v)
         });
         this.initialSlider = new SliderInput({
-            label: 'Initial\n°C', min: 0, max: 300, step: 1,  defaultValue: 25,
+            label: 'Initial\n°C', min: 0, max: 300, step: 1,  defaultValue: 0,
             onChange: v => this.sim.setInitialTemp(v)
         });
 
@@ -906,10 +1064,10 @@ class Section2 {
         row.appendChild(this.targetSlider.container);
         row.appendChild(this.initialSlider.container);
 
-        this.sim.setKp(2.0);
-        this.sim.setKi(0.05);
+        this.sim.setKp(0);
+        this.sim.setKi(0);
         this.sim.setTargetTemp(200);
-        this.sim.setInitialTemp(25);
+        this.sim.setInitialTemp(0);
         this.sim.reset();
 
         this._wireButtons(
@@ -948,7 +1106,7 @@ class Section2 {
         });
 
         stepBtn.addEventListener('click', () => {
-            if (!this.sim.isRunning()) { this.sim.step(); updateStatus(); }
+            if (!this.sim.isRunning()) { this.sim.step(); this.sim.render(); updateStatus(); }
         });
 
         resetBtn.addEventListener('click', () => {
@@ -972,17 +1130,20 @@ class Section3 {
         const canvas  = document.getElementById('graph-3');
         this.graph    = new TempGraph(canvas);
         this.sim      = new PIDSimulation(this.graph);
+        this.sim.setIntegralDisplay(
+            new IntegralDisplay(document.getElementById('integral-val-3'))
+        );
 
         this.kpSlider = new SliderInput({
-            label: 'Kp',        min: 0, max: 10,  step: 0.1,  defaultValue: 2.0,
+            label: 'Kp',        min: 0, max: 10,  step: 0.1,  defaultValue: 0,
             onChange: v => this.sim.setKp(v)
         });
         this.kiSlider = new SliderInput({
-            label: 'Ki',        min: 0, max: 1.0, step: 0.01, defaultValue: 0.05,
+            label: 'Ki',        min: 0, max: 1.0, step: 0.01, defaultValue: 0,
             onChange: v => this.sim.setKi(v)
         });
         this.kdSlider = new SliderInput({
-            label: 'Kd',        min: 0, max: 30,  step: 0.5,  defaultValue: 5.0,
+            label: 'Kd',        min: 0, max: 30,  step: 0.5,  defaultValue: 0,
             onChange: v => this.sim.setKd(v)
         });
         this.targetSlider = new SliderInput({
@@ -990,7 +1151,7 @@ class Section3 {
             onChange: v => this.sim.setTargetTemp(v)
         });
         this.initialSlider = new SliderInput({
-            label: 'Initial\n°C', min: 0, max: 300, step: 1,  defaultValue: 25,
+            label: 'Initial\n°C', min: 0, max: 300, step: 1,  defaultValue: 0,
             onChange: v => this.sim.setInitialTemp(v)
         });
 
@@ -1001,11 +1162,11 @@ class Section3 {
         row.appendChild(this.targetSlider.container);
         row.appendChild(this.initialSlider.container);
 
-        this.sim.setKp(2.0);
-        this.sim.setKi(0.05);
-        this.sim.setKd(5.0);
+        this.sim.setKp(0);
+        this.sim.setKi(0);
+        this.sim.setKd(0);
         this.sim.setTargetTemp(200);
-        this.sim.setInitialTemp(25);
+        this.sim.setInitialTemp(0);
         this.sim.reset();
 
         this._wireButtons(
@@ -1044,7 +1205,7 @@ class Section3 {
         });
 
         stepBtn.addEventListener('click', () => {
-            if (!this.sim.isRunning()) { this.sim.step(); updateStatus(); }
+            if (!this.sim.isRunning()) { this.sim.step(); this.sim.render(); updateStatus(); }
         });
 
         resetBtn.addEventListener('click', () => {

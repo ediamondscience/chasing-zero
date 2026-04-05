@@ -27,6 +27,7 @@ An interactive, self-contained tutorial that teaches digital PID (Proportional-I
 - [ ] Plot the **process variable** and **setpoint** over time on a live chart.
 - [ ] Show the current error and PID output values numerically.
 - [ ] Allow the user to start, pause, and reset the simulation.
+- [ ] In sections that include the integral term, display the integral's current contribution as a percentage of heater output alongside the graph, updating each cycle and clearing on reset.
 
 ### Code Transparency
 
@@ -74,7 +75,7 @@ No simulation in this section.
   - Kp slider (carried over from Section 1)
   - Ki slider (newly introduced)
 - **Run controls:** Start/Stop (real-time) and Step-by-Step mode
-- **Output:** Live graph of temperature over time with target reference line
+- **Output:** Live graph of temperature over time with target reference line, plus an **integral term display** to the right of the graph showing the I term's current contribution as a percentage of heater output — this makes the mechanism of windup visible to students
 
 ---
 
@@ -128,6 +129,12 @@ The following are set to reasonable values modelling an average FDM printer hote
 - `addPoint(temp)` — append a new temperature reading to the chart
 - `clear()` — remove all plotted points
 
+**`IntegralDisplay`** — one class, instances on Section 2 and Section 3 only
+- Displays the integral term's live contribution as a percentage of heater output, shown to the right of the graph
+- `update(percentage)` — set the displayed value (called by `PIDSimulation.step()` each cycle)
+- `clear()` — reset the display (called on reset)
+- `PIDSimulation` holds an optional reference to an `IntegralDisplay`; if set, `step()` calls `update()` and `reset()` calls `clear()` automatically
+
 **`SliderInput`** — one class, multiple instances (one per tunable parameter per section)
 - Encapsulates a vertical slider paired with a numerical readout below it
 - Changing the slider updates the number; editing the number updates the slider
@@ -155,6 +162,10 @@ The single file is divided into collapsible `#region` blocks so any editor that 
 #endregion
 
 #region JavaScript — TempGraph
+  ...
+#endregion
+
+#region JavaScript — IntegralDisplay
   ...
 #endregion
 
