@@ -281,12 +281,18 @@
         flex-direction: row;
         flex-wrap: wrap;
         gap: 0.25rem 1rem;
-        align-items: center;
+        text-align: center;
         width: 100%;
         padding-top: 0.2rem;
     }
 
-    .sim-status .stat-val { color: var(--accent); }
+    .sim-status .stat-val { 
+        color: var(--accent);
+        display: inline-block;
+        min-width: 10ch;   /* adjust per field */
+        font-variant-numeric: tabular-nums;
+        text-align: right;
+    }
     .sim-status .stat-warn { color: var(--warn); }
 
     /* --- Integral display --- */
@@ -366,15 +372,17 @@ output = clamp(output, 0, 100); // heater can't go below 0% or above 100%</code>
         <strong>steady-state error</strong>.
     </p>
     <p>
-        A high Kp can also cause the temperature to <strong>overshoot</strong> — it drives hard
-        past the target and then has to correct back, leading to oscillation.
+        Raising Kp gets the temperature closer to the target, but it never fully closes the gap.
+        The larger the Kp, the smaller the error — but there will always be some left. A
+        proportional controller always stops short.
     </p>
 
     <details class="hint">
         <summary>Need a hint?</summary>
-        <p>Start with <strong>Kp = 2</strong>. Notice how the temperature levels off just below
-        the setpoint — that is steady-state error. Then push <strong>Kp to 5 or higher</strong>
-        and watch the temperature swing past the target.</p>
+        <p>Try <strong>Kp = 2</strong>. The temperature climbs and levels off around
+        <strong>176 °C</strong> — 24 °C short of the target. That gap is steady-state error.
+        Now raise Kp to <strong>8</strong>: it gets closer (~193 °C) but still never reaches
+        200 °C. No value of Kp alone will get you there.</p>
     </details>
 
     <div class="sim-panel">
@@ -408,7 +416,8 @@ output = clamp(output, 0, 100); // heater can't go below 0% or above 100%</code>
         the temperature has been sitting below target for a long time.
     </p>
     <p>
-        The fix is to accumulate error over time. This is the <strong>integral</strong>. Every
+        The fix is to accumulate error over time. This is the <strong>integral</strong> because 
+        we are <strong>integrating</strong> the current error into our predictions! Every
         cycle the temperature is below target, the integral grows a little. That growth adds
         extra output, providing the push needed to close the gap all the way to zero.
     </p>
@@ -428,7 +437,7 @@ output    = clamp(output, 0, 100);</code></pre>
 
     <details class="hint">
         <summary>What does the I term display mean?</summary>
-        <p>The box to the right of the graph shows how much heater output the integral term is
+        <p>The I term shows us how much heater output the integral term is
         commanding on its own, as a percentage. The heater is capped at 100% — but the integral
         doesn't know that. It just keeps accumulating.</p>
         <p>When the display turns <strong style="color:var(--warn)">red</strong>, the integral is
@@ -439,9 +448,16 @@ output    = clamp(output, 0, 100);</code></pre>
 
     <details class="hint">
         <summary>Need a hint?</summary>
-        <p>Start with <strong>Kp = 2, Ki = 0.05</strong>. The temperature now reaches the
-        setpoint. Then push <strong>Ki to 0.3 or higher</strong> to see integral windup — watch
-        the I term display turn red and the temperature rocket past the target.</p>
+        <p>Try <strong>Kp = 2, Ki = 0.01</strong>. The temperature climbs to around
+        <strong>198 °C</strong> and stays there — close but the integral isn't strong enough
+        to fully close the gap. Raise Ki to <strong>0.05</strong>: the temperature now
+        overshoots to around <strong>215 °C</strong> before settling at 200 °C, and the I
+        term display turns orange as the integral approaches its limit. Then push
+        <strong>Ki to 0.1</strong>: watch the I term go fully red and the temperature rocket
+        past <strong>244 °C</strong> before slowly returning. Now try <strong>Kp = 0.5, Ki = 0.85</strong>.
+        We still get a strong overshoot, and now we see oscillation with our temperature jumping
+        above and below our set points before settling. This is coloquially refered to as <strong>ringing</strong>
+        and is a sign that our integral gain is too high.</p>
     </details>
 
     <div class="sim-panel">
@@ -493,22 +509,31 @@ output     = clamp(output, 0, 100);
 prevError  = error;                     // remember for next cycle</code></pre>
 
     <p>
-        <strong>Kd</strong> is the <em>derivative gain</em>. It is the most sensitive of the
-        three terms. Too much Kd slows the response unnecessarily; in a real system it can also
-        amplify measurement noise and cause erratic heater behaviour.
+        <strong>Kd</strong> is the <em>derivative gain</em>. In a real 3D printer, it matters
+        most for two reasons: braking the approach in mechanically complex systems with inertia,
+        and damping out oscillation caused by external disturbances (like a cooling fan suddenly
+        turning on). It is also the most noise-sensitive term — in real firmware it is often set
+        to zero or kept very small precisely because sensor noise causes erratic heater pulses.
     </p>
     <p>
-        With all three terms tuned together you can achieve a response that reaches the setpoint
-        quickly, settles cleanly without oscillation, and holds it there with no steady-state
-        error. This is the complete PID controller.
+        In our simplified model, the integral term accumulates so heavily during the heating
+        phase that the derivative cannot meaningfully oppose it. This is actually the honest
+        lesson: <strong>Kd alone does not fix integral windup.</strong> Real printer firmware
+        like Klipper and Marlin solve the windup problem with <em>anti-windup protection</em>,
+        which clamps the integral so it can never build past what the heater can deliver.
+        The derivative's job is to smooth the response once windup is already tamed.
     </p>
 
     <details class="hint">
         <summary>Need a hint?</summary>
-        <p>Start with <strong>Kp = 2, Ki = 0.05, Kd = 5</strong> for a smooth, well-damped
-        response — the payoff for all three sections. Then set <strong>Kd to 0</strong> to
-        watch oscillation return, or raise it past <strong>20</strong> to see the derivative
-        over-damp the approach.</p>
+        <p>Set <strong>Kp = 2, Ki = 0.05, Kd = 20</strong> and run. The graph looks nearly
+        identical to Section 2 with the same Kp and Ki — the windup is still happening and
+        Kd cannot stop it. Now try increasing Kd all the way to <strong>30</strong>: still
+        no real difference. The integral accumulation during the heating phase drowns out
+        any braking Kd applies. Let's see what happens when we already have a poorly tuned system
+        and we add a high derivative gain. Set <strong>Kp = 0.5, Ki = 0.85</strong> and start playing
+        with <strong>Kd</strong>. You'll see longer oscillations, meaning a worse tuned controller.</p>
+        <p>Scroll to Section 4 to see what happens once windup is brought under control.</p>
     </details>
 
     <div class="sim-panel">
@@ -531,6 +556,80 @@ prevError  = error;                     // remember for next cycle</code></pre>
             <canvas id="graph-3" width="580" height="260"></canvas>
         </div>
     </div>
+
+    <hr class="section-divider">
+
+    <!-- ══════════════════════════════════════════ Section 4: Anti-windup + D ═══ -->
+
+    <h2>4 — Anti-Windup and the Derivative</h2>
+    <p>
+        In Section 3 you saw that Kd alone can't stop integral windup — the integral
+        accumulates too much power during the long heating phase before Kd ever gets a chance
+        to act. Real PID implementations solve this with <strong>anti-windup protection</strong>:
+        the integral is clamped so that its contribution can never exceed a set ceiling.
+        Once windup is under control, the derivative finally has room to do its job.
+    </p>
+    <p>
+        In this simulation the integral is clamped to a maximum of 150% heater output.
+        We're still letting it overrun the heater a little bit, but now it cannot enter hudreds of thouseands of percent.
+        With that windup
+        removed, raising Kd will visibly reduce the overshoot on the graph.
+    </p>
+
+<pre><code>error      = targetTemp - currentTemp;
+integral  += error;
+integral   = clamp(integral, 0, MAX_INTEGRAL); // anti-windup: cap the accumulated sum
+derivative = error - prevError;
+output     = Kp * error
+           + Ki * integral
+           + Kd * derivative;
+output     = clamp(output, 0, 100);
+prevError  = error;</code></pre>
+
+    <p>
+        <strong>Kd</strong> now acts as a brake during the final approach. As the temperature
+        races toward the setpoint, the derivative term produces a negative output that reduces
+        heater power before the overshoot happens. A well-tuned Kd brings the temperature
+        in smoothly without a peak at all.
+    </p>
+
+    <details class="hint">
+        <summary>Need a hint?</summary>
+        <p>Start with <strong>Kp = 2, Ki = 0.05, Kd = 0</strong>. The graph overshoots to
+        about <strong>215 °C</strong> — same as Section 3, but now the clamp is stopping it
+        from going further. Then raise Kd to <strong>9</strong> and watch the peak drop to
+        around 212 °C. Try <strong>Kd = 30</strong> to see it over-damp —
+        the approach slows down noticeably but barely overshoots. Keep an eye on the output too!
+        It's shooting between 12% and 100% every other cycle! This type of low amplitude, 
+        high frequency oscillation on output almost always means that a system has too much derivative gain.
+        With <strong>Kd = 30</strong> try playing with the initial and target temperatures. Notice how the
+        controller takes much longer to settle if the target temperature is below the initial temperature?
+        It's very easy to mess this parameter up, so most 3D printing firmware won't expose it at all!</p>
+    </details>
+
+    <div class="sim-panel">
+        <div class="sim-left">
+            <div class="sliders-row" id="sliders-4"></div>
+            <div class="sim-buttons">
+                <button id="btn-run-4">Run</button>
+                <button id="btn-step-4">Step</button>
+                <button id="btn-reset-4">Reset</button>
+            </div>
+            <div class="sim-status" id="status-4">
+                <span>cycle &nbsp;<span class="stat-val" id="cycle-4">0</span></span>
+                <span>temp &nbsp;&nbsp;<span class="stat-val" id="temp-4">25.0</span> °C</span>
+                <span>error &nbsp;<span class="stat-val" id="err-4">175.0</span></span>
+                <span>output <span class="stat-val" id="out-4">0.0</span> %</span>
+                <span>I term &nbsp;<span class="stat-val" id="integral-val-4">—</span></span>
+            </div>
+        </div>
+        <div class="sim-right">
+            <canvas id="graph-4" width="580" height="260"></canvas>
+        </div>
+    </div>
+    <p>Try tuning for the lowest possible transition between temperatures and smallest settling time!
+    Keep in mind that values that work for one initial temperature and target temperature may not work for the range of the simulation.
+    <strong>Have fun!</strong></p>
 
     <hr class="section-divider">
 
@@ -829,16 +928,16 @@ class SliderInput {
 
 // #region JavaScript — PIDSimulation
 
-const MAX_CYCLES = 500;
+const MAX_CYCLES = 2000;
 
 class PIDSimulation {
     // Physical constants — FDM hotend model (not exposed to user)
-    static HEATING_COEFF = 2.5;    // °C per cycle at 100% heater power
-    static COOLING_COEFF = 0.008;  // fraction of excess heat above ambient lost per cycle
-    static AMBIENT       = 25;     // °C — ambient air temperature
-    static DT            = 1;      // timestep (each cycle = 1 unit of simulation time)
-    static MAX_HEATER    = 100;    // heater output ceiling (%)
-    static MIN_HEATER    = 0;      // heater output floor (%)
+    static HEATING_COEFF   = 10;    // °C per cycle at 100% heater power
+    static COOLING_COEFF   = 0.032; // fraction of excess heat above ambient lost per cycle
+    static AMBIENT         = 25;    // °C — ambient air temperature
+    static DT              = 0.25;  // timestep (finer steps eliminate limit-cycle oscillation at high Kd)
+    static MAX_HEATER      = 100;   // heater output ceiling (%)
+    static MIN_HEATER      = 0;     // heater output floor (%)
 
     constructor(graph) {
         this.graph           = graph;
@@ -846,6 +945,7 @@ class PIDSimulation {
         this.kp              = 0;
         this.ki              = 0;
         this.kd              = 0;
+        this.integralClamp   = null; // null = no clamp; number = max Ki*integral in % units
         this.targetTemp      = 200;
         this.initialTemp     = 25;
         this._intervalId     = null;
@@ -854,6 +954,10 @@ class PIDSimulation {
 
     setIntegralDisplay(display) {
         this.integralDisplay = display;
+    }
+
+    setIntegralClamp(maxPct) {
+        this.integralClamp = maxPct; // e.g. 150 means Ki*integral is clamped to 150%
     }
 
     // --- Configuration setters ---
@@ -895,6 +999,11 @@ class PIDSimulation {
 
         const error       = this.targetTemp - this.currentTemp;
         this.integral    += error * DT;
+        // Optional anti-windup: clamp integral so Ki*integral never exceeds integralClamp %.
+        if (this.integralClamp !== null && this.ki > 0) {
+            const maxIntegral = this.integralClamp / this.ki;
+            this.integral = Math.max(0, Math.min(maxIntegral, this.integral));
+        }
         const derivative  = (error - this.prevError) / DT;
         this.prevError    = error;
 
@@ -1237,9 +1346,109 @@ class Section3 {
 // #endregion
 
 
+// #region JavaScript — Section4 (Anti-windup + PID)
+
+class Section4 {
+    constructor() {
+        const canvas  = document.getElementById('graph-4');
+        this.graph    = new TempGraph(canvas);
+        this.sim      = new PIDSimulation(this.graph);
+        this.sim.setIntegralClamp(150);
+        this.sim.setIntegralDisplay(
+            new IntegralDisplay(document.getElementById('integral-val-4'))
+        );
+
+        this.kpSlider = new SliderInput({
+            label: 'Kp',        min: 0, max: 10,  step: 0.1,  defaultValue: 0,
+            onChange: v => this.sim.setKp(v)
+        });
+        this.kiSlider = new SliderInput({
+            label: 'Ki',        min: 0, max: 1.0, step: 0.01, defaultValue: 0,
+            onChange: v => this.sim.setKi(v)
+        });
+        this.kdSlider = new SliderInput({
+            label: 'Kd',        min: 0, max: 30,  step: 0.5,  defaultValue: 0,
+            onChange: v => this.sim.setKd(v)
+        });
+        this.targetSlider = new SliderInput({
+            label: 'Target °C', min: 0, max: 300, step: 1,    defaultValue: 200,
+            onChange: v => this.sim.setTargetTemp(v)
+        });
+        this.initialSlider = new SliderInput({
+            label: 'Initial °C', min: 0, max: 300, step: 1,   defaultValue: 25,
+            onChange: v => this.sim.setInitialTemp(v)
+        });
+
+        const row = document.getElementById('sliders-4');
+        row.appendChild(this.kpSlider.container);
+        row.appendChild(this.kiSlider.container);
+        row.appendChild(this.kdSlider.container);
+        row.appendChild(this.targetSlider.container);
+        row.appendChild(this.initialSlider.container);
+
+        this.sim.setKp(0);
+        this.sim.setKi(0);
+        this.sim.setKd(0);
+        this.sim.setTargetTemp(200);
+        this.sim.setInitialTemp(25);
+        this.sim.reset();
+
+        this._wireButtons(
+            document.getElementById('btn-run-4'),
+            document.getElementById('btn-step-4'),
+            document.getElementById('btn-reset-4'),
+            document.getElementById('cycle-4'),
+            document.getElementById('temp-4'),
+            document.getElementById('err-4'),
+            document.getElementById('out-4')
+        );
+    }
+
+    _wireButtons(runBtn, stepBtn, resetBtn, cycleEl, tempEl, errEl, outEl) {
+        const updateStatus = () => {
+            cycleEl.textContent = this.sim.getCycle();
+            tempEl.textContent  = this.sim.getTemp().toFixed(1);
+            errEl.textContent   = this.sim.getError().toFixed(1);
+            outEl.textContent   = this.sim.getOutput().toFixed(1);
+        };
+
+        runBtn.addEventListener('click', () => {
+            if (this.sim.isRunning()) {
+                this.sim.stop();
+                runBtn.textContent = 'Run';
+                runBtn.classList.remove('btn-active');
+            } else {
+                if (this.sim.isFinished()) { this.sim.reset(); updateStatus(); }
+                runBtn.textContent = 'Stop';
+                runBtn.classList.add('btn-active');
+                this.sim.run(
+                    () => updateStatus(),
+                    () => { runBtn.textContent = 'Run'; runBtn.classList.remove('btn-active'); }
+                );
+            }
+        });
+
+        stepBtn.addEventListener('click', () => {
+            if (!this.sim.isRunning()) { this.sim.step(); this.sim.render(); updateStatus(); }
+        });
+
+        resetBtn.addEventListener('click', () => {
+            this.sim.reset();
+            runBtn.textContent = 'Run';
+            runBtn.classList.remove('btn-active');
+            updateStatus();
+        });
+
+        updateStatus();
+    }
+}
+
+// #endregion
+
+
 // --- Bootstrap ---
 document.addEventListener('DOMContentLoaded', () => {
-    const sections = [new Section1(), new Section2(), new Section3()];
+    const sections = [new Section1(), new Section2(), new Section3(), new Section4()];
 
     // Firefox defers compositing off-screen canvases, so a render call at load
     // time is silently discarded for anything below the fold. Use
