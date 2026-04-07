@@ -526,10 +526,15 @@ prevError  = error;                     // remember for next cycle</code></pre>
 
     <details class="hint">
         <summary>Need a hint?</summary>
-        <p>Set <strong>Kp = 2, Ki = 0.05, Kd = 20</strong> and run. The graph looks nearly
-        identical to Section 2 with the same Kp and Ki — the windup is still happening and
-        Kd cannot stop it. Now try increasing Kd all the way to <strong>30</strong>: still
-        no real difference. The integral accumulation during the heating phase drowns out
+        <p>Set <strong>Kp = 2, Ki = 0.05, Kd = 5</strong> and run. The graph looks nearly
+        identical to Section 2 with the same Kp and Ki — the overshoot is still happening and
+        Kd cannot stop it. Now try increasing Kd all the way to <strong>9.5</strong>: still
+        no real difference. If we go beyond that to <strong>Kd = 10</strong> we'll see some new behavior.
+        The output now shoots between <strong>12.5% - 100% on back to back cycles</strong>.
+        We're oscillating, which is a clear sign that we're <strong>overdamped</strong>.
+        Now let's push our derivative term to it's limit, <strong>Kd = 30</strong> and let the simulation run.
+        We have reduced the overshoot, but now our integral term never drops below <strong style="color: var(--warn);">145%</strong>. 
+        The integral accumulation during the heating phase drowns out
         any braking Kd applies. Let's see what happens when we already have a poorly tuned system
         and we add a high derivative gain. Set <strong>Kp = 0.5, Ki = 0.85</strong> and start playing
         with <strong>Kd</strong>. You'll see longer oscillations, meaning a worse tuned controller.</p>
